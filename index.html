@@ -3,93 +3,169 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的股票监控</title>
+    <title>我的股票监控 - 长电科技</title>
+    <!-- 适配GitHub Pages的跨域策略 -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' https://hq.sinajs.cn; style-src 'self' 'unsafe-inline';">
     <style>
-        body{background:#f5f6f7;padding:10px;font-family:微软雅黑}
-        .title{text-align:center;font-size:20px;padding:15px 0;font-weight:bold}
-        .item{background:#fff;border-radius:8px;padding:12px 15px;margin-bottom:10px;display:flex;justify-content:space-between}
-        .name{font-size:16px;font-weight:500}
-        .code{font-size:12px;color:#999;margin-top:4px}
-        .price{font-size:18px;font-weight:bold}
-        .up{color:#f53f3f}
-        .down{color:#00b42a}
-        .tip{text-align:center;font-size:12px;color:#999;margin-top:20px}
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #f5f7fa;
+            font-family: -apple-system, BlinkMacSystemFont, "微软雅黑", sans-serif;
+            padding: 15px;
+        }
+        .title {
+            text-align: center;
+            font-size: 22px;
+            font-weight: 600;
+            color: #333;
+            margin: 20px 0;
+        }
+        .stock-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .stock-info {
+            flex: 1;
+        }
+        .stock-name {
+            font-size: 18px;
+            color: #222;
+            font-weight: 500;
+        }
+        .stock-code {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+        .stock-price {
+            text-align: right;
+            flex: 1;
+        }
+        .price {
+            font-size: 20px;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+        .up {
+            color: #f53f3f;
+        }
+        .down {
+            color: #00b42a;
+        }
+        .flat {
+            color: #666;
+        }
+        .change {
+            font-size: 14px;
+            margin-top: 4px;
+        }
+        .refresh-tip {
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
     <div class="title">我的自选股</div>
-    <div id="list"></div>
-    <div class="tip">每5秒刷新一次</div>
+    <div id="stockContainer"></div>
+    <div class="refresh-tip">数据每5秒自动刷新 | 行情延迟约15秒</div>
 
     <script>
-        // 你的股票：600584长电科技（沪市）
-        const stocks = [
-            {code: "600584", name: "长电科技", prefix: "sh"}
+        // 配置你的股票：600584长电科技（沪市前缀sh）
+        const STOCK_LIST = [
+            { code: "600584", name: "长电科技", marketPrefix: "sh" }
+            { code: "001896", name: "豫能控股", marketPrefix: "sh" }
         ];
 
-        // 核心：改用新浪财经的JSONP接口（避开本地跨域限制）
-        function getStock(s, callback) {
-            // 1. 创建script标签（JSONP方式绕跨域）
-            const script = document.createElement('script');
-            script.src = `https://hq.sinajs.cn/list=${s.prefix}${s.code}?r=${Math.random()}`;
-            
-            // 2. 定义回调函数
-            window['hq_str_' + s.prefix + s.code] = function(data) {
-                try {
-                    // 拆分新浪返回的文本数据
-                    const arr = data.split(',');
-                    const price = arr[3]; // 最新价
-                    const yesterdayPrice = arr[2]; // 昨收价
-                    const zd = (price - yesterdayPrice).toFixed(2); // 涨跌额
-                    const zdf = ((zd / yesterdayPrice) * 100).toFixed(2); // 涨跌幅
-                    const cls = zd >= 0 ? "up" : "down";
+        // 解析新浪财经JSONP数据
+        function parseStockData(stockItem, rawData) {
+            try {
+                const dataArr = rawData.split(',');
+                const currentPrice = dataArr[3] || '0.00'; // 最新价
+                const yesterdayPrice = dataArr[2] || currentPrice; // 昨收价
+                const priceChange = (currentPrice - yesterdayPrice).toFixed(2); // 涨跌额
+                const changeRate = ((priceChange / yesterdayPrice) * 100).toFixed(2); // 涨跌幅
 
-                    // 组装显示内容
-                    const html = `
-                        <div class="item">
-                            <div>
-                                <div class="name">${s.name}</div>
-                                <div class="code">${s.code}</div>
-                            </div>
-                            <div>
-                                <div class="price ${cls}">${price}</div>
-                                <div class="${cls}">${zd} / ${zdf}%</div>
-                            </div>
+                // 判定涨跌样式
+                let priceClass = 'flat';
+                if (parseFloat(priceChange) > 0) priceClass = 'up';
+                if (parseFloat(priceChange) < 0) priceClass = 'down';
+
+                return `
+                    <div class="stock-card">
+                        <div class="stock-info">
+                            <div class="stock-name">${stockItem.name}</div>
+                            <div class="stock-code">${stockItem.code}</div>
                         </div>
-                    `;
-                    callback(html);
-                } catch (e) {
-                    callback(`<div class="item">${s.name} 数据解析失败</div>`);
-                }
-                // 用完删除script标签
-                document.body.removeChild(script);
-                delete window['hq_str_' + s.prefix + s.code];
-            };
-
-            // 3. 加载script标签
-            document.body.appendChild(script);
+                        <div class="stock-price">
+                            <div class="price ${priceClass}">${currentPrice}</div>
+                            <div class="change ${priceClass}">${priceChange} / ${changeRate}%</div>
+                        </div>
+                    </div>
+                `;
+            } catch (e) {
+                return `<div class="stock-card"><div>⚠️ ${stockItem.name} 数据加载失败</div></div>`;
+            }
         }
 
-        // 批量更新所有股票
-        function updateAll() {
-            let html = "";
-            let count = 0;
+        // 加载单只股票数据（JSONP方式，适配GitHub Pages）
+        function loadStock(stockItem) {
+            return new Promise((resolve) => {
+                // 生成唯一回调名，避免冲突
+                const callbackName = `stockCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+                const script = document.createElement('script');
+                
+                // 新浪财经JSONP接口（稳定、无跨域限制）
+                const apiUrl = `https://hq.sinajs.cn/list=${stockItem.marketPrefix}${stockItem.code}?r=${Math.random()}&callback=${callbackName}`;
+                
+                // 定义回调函数
+                window[callbackName] = function(data) {
+                    const html = parseStockData(stockItem, data);
+                    resolve(html);
+                    // 清理资源
+                    document.body.removeChild(script);
+                    delete window[callbackName];
+                };
 
-            stocks.forEach(s => {
-                getStock(s, (stockHtml) => {
-                    html += stockHtml;
-                    count++;
-                    // 所有股票都获取完后渲染
-                    if (count === stocks.length) {
-                        document.getElementById('list').innerHTML = html;
-                    }
-                });
+                // 加载超时处理
+                script.timeout = setTimeout(() => {
+                    resolve(`<div class="stock-card"><div>⚠️ ${stockItem.name} 加载超时</div></div>`);
+                    document.body.removeChild(script);
+                    delete window[callbackName];
+                }, 5000);
+
+                script.src = apiUrl;
+                document.body.appendChild(script);
             });
         }
 
-        // 首次加载 + 5秒刷新
-        updateAll();
-        setInterval(updateAll, 5000);
+        // 批量加载所有股票并渲染
+        async function renderAllStocks() {
+            const container = document.getElementById('stockContainer');
+            let html = '';
+            
+            for (const stock of STOCK_LIST) {
+                html += await loadStock(stock);
+            }
+            
+            container.innerHTML = html;
+        }
+
+        // 初始化 + 定时刷新
+        renderAllStocks();
+        setInterval(renderAllStocks, 5000);
     </script>
 </body>
 </html>
